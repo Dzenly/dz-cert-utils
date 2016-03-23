@@ -1,0 +1,15 @@
+{
+  "name": "cert-utils",
+  "version": "0.0.1",
+  "description": "Utilities for work with certificates on top of node-forge and ursa.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "RSA",
+    "certificate"
+  ],
+  "author": "Dzenly",
+  "license": "MIT"
+}
