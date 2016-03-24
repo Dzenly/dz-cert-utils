@@ -19,5 +19,12 @@
   "bugs": {
     "url": "https://github.com/Dzenly/cert-utils/issues"
   },
-  "homepage": "https://github.com/Dzenly/cert-utils#readme"
+  "homepage": "https://github.com/Dzenly/cert-utils#readme",
+  "optionalDependencies": {
+    "ursa": "^0.9.3"
+  },
+  "dependencies": {
+    "bluebird": "^3.3.4",
+    "node-forge": "^0.6.39"
+  }
 }

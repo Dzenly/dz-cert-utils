@@ -1,9 +1,9 @@
 'use strict';
 var util = require('util');
-var certUtils = require('../../cert');
-var timer = require('../../../../perf/timer');
-var dateUtils = require('../../../../date');
-var t = require('test-engine/tmp-light-utils');
+var certUtils = require('cert-utils');
+var timer = require('timer-utils');
+var dateUtils = require('date-ex');
+var t = require('tia/tmp-light-utils');
 t.init(true, true);
 
 var gCn = 'SomeCN';
