@@ -221,7 +221,9 @@ exports.genSSCertAsync = function (cn) {
 
 if (process.send) { // Модуль вызван через fork.
     var cn = process.argv[2];
-    var res = exports.genSSCert(cn);
-    res.pfx = res.pfx.toString('base64');
-    process.send(res);
+    if (cn) {
+        var res = exports.genSSCert(cn);
+        res.pfx = res.pfx.toString('base64');
+        process.send(res);
+    }
 };
