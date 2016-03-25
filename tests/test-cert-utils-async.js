@@ -1,7 +1,7 @@
 #! /usr/bin/env node
 'use strict';
 var util = require('util');
-var certUtils = require('dz-cert-utils');
+var certUtils = require('../');
 var timer = require('dz-timer-utils');
 var dateUtils = require('dz-date-utils');
 var t = require('tia/tmp-light-utils');

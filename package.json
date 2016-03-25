@@ -26,5 +26,10 @@
   "dependencies": {
     "bluebird": "^3.3.4",
     "node-forge": "^0.6.39"
+  },
+  "devDependencies": {
+    "dz-date-utils": "^0.1.1",
+    "dz-timer-utils": "^0.1.2",
+    "tia": "^0.1.1"
   }
 }
