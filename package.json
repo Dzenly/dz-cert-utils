@@ -1,5 +1,5 @@
 {
-  "name": "cert-utils",
+  "name": "dz-cert-utils",
   "version": "0.1.0",
   "description": "Utilities for work with certificates on top of node-forge and ursa.",
   "main": "index.js",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/Dzenly/cert-utils.git"
+    "url": "git+ssh://git@github.com/Dzenly/dz-cert-utils.git"
   },
   "keywords": [
     "RSA",
@@ -17,9 +17,9 @@
   "author": "Dzenly",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Dzenly/cert-utils/issues"
+    "url": "https://github.com/Dzenly/dz-cert-utils/issues"
   },
-  "homepage": "https://github.com/Dzenly/cert-utils#readme",
+  "homepage": "https://github.com/Dzenly/dz-cert-utils#readme",
   "optionalDependencies": {
     "ursa": "^0.9.3"
   },
