@@ -224,6 +224,9 @@ if (process.send) { // Модуль вызван через fork.
     if (cn) {
         var res = exports.genSSCert(cn);
         res.pfx = res.pfx.toString('base64');
-        process.send(res);
+        process.send(res, function() {
+          // https://github.com/nodejs/node-v0.x-archive/issues/2605
+          process.exit();
+        });
     }
 };
