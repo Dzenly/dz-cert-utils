@@ -1,67 +1,71 @@
 #! /usr/bin/env node
+
 'use strict';
-var util = require('util');
-var certUtils = require('../');
-var timer = require('dz-timer-utils');
-var dateUtils = require('dz-date-utils');
-var t = require('tia/tmp-light-utils');
+
+/* eslint-disable no-console */
+
+const util = require('util');
+const certUtils = require('../');
+const timer = require('dz-timer-utils');
+const dateUtils = require('dz-date-utils');
+const t = require('tia/tmp-light-utils');
+
 t.init(true, true);
 
-var gCn = 'SomeCN';
+const gCn = 'SomeCN';
 
 function BoolAccummulator() {
-    this.res = true;
-    this.and = function(res) {
-        if (!res) {
-            this.res = false;
-        }
-    };
+  this.res = true;
+  this.and = function and(res) {
+    if (!res) {
+      this.res = false;
+    }
+  };
 }
 
 function checkCert(actData, exp) {
-
-    var acc = new BoolAccummulator();
-    for (var i = 0, len = certUtils.dataCertProps.length; i < len; i++) {
-        var propName = certUtils.dataCertProps[i];
-        var propType = typeof actData[propName];
-        var msg = propName + ' check';
-        if (propType === 'string') {
-            acc.and(t.eq(actData[propName], exp[propName], msg));
-        } else if (propType === 'object') {
-            acc.and(t.eqDays(actData[propName], exp[propName], msg));
-        }
+  const acc = new BoolAccummulator();
+  for (let i = 0, len = certUtils.dataCertProps.length; i < len; i++) {
+    const propName = certUtils.dataCertProps[i];
+    const propType = typeof actData[propName];
+    const msg = `${propName} check`;
+    if (propType === 'string') {
+      acc.and(t.eq(actData[propName], exp[propName], msg));
+    } else if (propType === 'object') {
+      acc.and(t.eqDays(actData[propName], exp[propName], msg));
     }
-    return acc.res;
+  }
+  return acc.res;
 }
 
-var origMinusDays = certUtils.certCfg.minusDays;
-var origPlusDays = certUtils.certCfg.plusDays;
-var certObj = certUtils.genSSCert(gCn);
-var certData = certUtils.extractCertData(certObj.cert);
-var curDate = new Date();
+const origMinusDays = certUtils.certCfg.minusDays;
+const origPlusDays = certUtils.certCfg.plusDays;
+const certObj = certUtils.genSSCert(gCn);
+const certData = certUtils.extractCertData(certObj.cert);
+const curDate = new Date();
 
 t.msg('Check for certificate parameters');
 
-var res = checkCert(certData, {
-    subjectCn: gCn,
-    issuerCn: gCn,
-    serialNumber: '01',
-    notBefore: dateUtils.addDaysToDate(curDate, -origMinusDays),
-    notAfter: dateUtils.addDaysToDate(curDate, origPlusDays)
+const certCheckRes = checkCert(certData, {
+  subjectCn: gCn,
+  issuerCn: gCn,
+  serialNumber: '01',
+  notBefore: dateUtils.addDaysToDate(curDate, -origMinusDays),
+  notAfter: dateUtils.addDaysToDate(curDate, origPlusDays),
 });
-t.eq(res, true, 'Whole certificate check');
+t.eq(certCheckRes, true, 'Whole certificate check');
 
 // TODO: tests for minusDate + Date in couple with checks with created certificaes.
 
-var checkRes = certUtils.checkCertificate(certObj.cert, {
-    subjectCn: gCn,
-    issuerCn: gCn,
-    serialNumber: '01'
+let checkRes = certUtils.checkCertificate(certObj.cert, {
+  subjectCn: gCn,
+  issuerCn: gCn,
+  serialNumber: '01',
 });
-var checkRes1 = certUtils.checkCertificate(certObj.pfx, {
-    subjectCn: gCn,
-    issuerCn: gCn,
-    serialNumber: '01'
+let checkRes1 = certUtils.checkCertificate(certObj.pfx, {
+  subjectCn: gCn,
+  issuerCn: gCn,
+  serialNumber: '01',
 });
 console.log(util.inspect(checkRes));
 t.eqObjects(checkRes, checkRes1, 'Objects comparison');
@@ -72,60 +76,81 @@ console.log(util.inspect(checkRes));
 t.eqObjects(checkRes, checkRes1, 'Objects comparison');
 
 checkRes = certUtils.checkCertificate(certObj.cert, {
-    subjectCn: 'Non correct Cn',
-    issuerCn: gCn,
-    serialNumber: '02'
+  subjectCn: 'Non correct Cn',
+  issuerCn: gCn,
+  serialNumber: '02',
 });
 checkRes1 = certUtils.checkCertificate(certObj.pfx, {
-    subjectCn: 'Non correct Cn',
-    issuerCn: gCn,
-    serialNumber: '02'
+  subjectCn: 'Non correct Cn',
+  issuerCn: gCn,
+  serialNumber: '02',
 });
 console.log(util.inspect(checkRes));
 t.eqObjects(checkRes, checkRes1, 'Objects comparison');
 
 t.msg('Bad case, using throw');
 try {
-    checkRes = certUtils.checkCertificate(certObj.cert, {
-        subjectCn: 'Non correct Cn',
-        issuerCn: gCn,
-        serialNumber: '02',
-        throwIfWrong: true
-    });
-    t.fail('Unexpected ansense of throw');
+  checkRes = certUtils.checkCertificate(certObj.cert, {
+    subjectCn: 'Non correct Cn',
+    issuerCn: gCn,
+    serialNumber: '02',
+    throwIfWrong: true,
+  });
+  t.fail('Unexpected ansense of throw');
 } catch (e) {
-    t.pass('Expected throw: ' + e);
+  t.pass(`Expected throw: ${e}`);
 }
 
 t.msg('Get certificate cn from not certificate string, should throw');
-var cn;
+let cn;
 try {
-    cn = certUtils.getCertificateCn('asdfasdfasdfasd');
-    t.fail('Unexpected non throw, cn: ' + cn);
+  cn = certUtils.getCertificateCn('asdfasdfasdfasd');
+  t.fail(`Unexpected non throw, cn: ${cn}`);
 } catch (e) {
-    t.pass('Expected throw: ' + e.message);
+  t.pass(`Expected throw: ${e.message}`);
 }
 
 t.msg('Generation of correct certificate');
-var timerObj = timer.startTimer('Certificate Generation');
-var p = certUtils.genSSCertAsync(gCn);
+const timerObj = timer.startTimer('Async Certificate Generation');
+const p = certUtils.genSSCertAsync(gCn);
 
-p.then(function (res) {
-    timerObj.stopTimer();
+p.then((res) => {
+  timerObj.stopTimer();
 
-    var cn = certUtils.getCertificateCn(res.cert);
-    t.eq(cn, gCn, 'Checking CN');
-    t.msg('Serial Number: ' + certUtils.getCertificateSerNum(res.cert));
-}).catch(function (err) {
-    t.fail(err);
-}).then(function (res) {
-    t.msg('Generation a certificate without CN, should fail')
-    return certUtils.genSSCertAsync();
-}).then(function (res) {
-    t.fail('Here should be error:' + certUtils.getCertificateCn(res.cert));
-}, function (err) {
-    t.checkAssertion(err, 'Expected assertion');
-}).then(function (res) {
-    t.total();
+  cn = certUtils.getCertificateCn(res.cert);
+  t.eq(cn, gCn, 'Checking CN');
+  t.msg(`Serial Number: ${certUtils.getCertificateSerNum(res.cert)}`);
+}).catch((err) => {
+  t.fail(err);
+}).then(() => {
+  t.msg('Generation a certificate without CN, should fail');
+  return certUtils.genSSCertAsync();
+}).then((res) => {
+  t.fail(`Here should be error:${certUtils.getCertificateCn(res.cert)}`);
+}, (err) => {
+  t.checkAssertion(err, 'Expected assertion');
+}).then(() => {
+  const attrs = [{
+    name: 'countryName',
+    value: 'AA',
+  }, {
+    name: 'localityName',
+    value: 'BBBB',
+  }, {
+    name: 'organizationName',
+    value: 'CCCCC',
+  }];
+  return certUtils.genSSCertAsync('New cn', undefined, attrs);
+}).then((res) => {
+  console.log(certUtils.extractCertData(res.cert));
+}).then(() => {
+  return certUtils.genKeyPairAsync();
+}).then((res) => {
+  t.eq(Boolean(res), true, 'Key pair is generated.');
+  return certUtils.genSSHKeyPairAsync('user@machine');
+}).then((res) => {
+  console.log(res);
+}).then(() => {
+  t.total();
 });
 

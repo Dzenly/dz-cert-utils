@@ -21,15 +21,14 @@
   },
   "homepage": "https://github.com/Dzenly/dz-cert-utils#readme",
   "optionalDependencies": {
-    "ursa": "^0.9.3"
+    "ursa": "0.9.4"
   },
   "dependencies": {
-    "bluebird": "^3.3.4",
-    "node-forge": "^0.6.39"
+    "node-forge": "0.7.5"
   },
   "devDependencies": {
-    "dz-date-utils": "^0.1.1",
-    "dz-timer-utils": "^0.1.2",
-    "tia": "^0.1.1"
+    "dz-date-utils": "*",
+    "dz-timer-utils": "*",
+    "tia": "*"
   }
 }

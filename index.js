@@ -1,92 +1,186 @@
 'use strict';
 
-var assert = require('assert');
-var forge = require('node-forge');
-var fork = require('child_process').fork;
-var Promise = require('bluebird');
+function getChildExecArgv() {
+  // Fix for forked process debugging.
+  function amIUnderDebug() {
+    const argv = process.execArgv.join();
+    return argv.includes('--inspect') || argv.includes('--debug');
+  }
 
-// Фикс для 2х-процессной отладки в WebStorm.
-// http://stackoverflow.com/questions/16840623/how-to-debug-node-js-child-forked-process
-var isDebug = typeof v8debug === 'object';
-if (isDebug) {
-    //Set an unused port number.
-    process.execArgv.push('--debug=' + (40896));
+  if (!amIUnderDebug()) {
+    return process.execArgv;
+  }
+
+  return process.execArgv.map((val) => {
+    if (val.startsWith('--inspect-brk=')) {
+      return '--inspect-brk=0';
+    }
+    if (val.startsWith('--inspect=')) {
+      return '--inspect=0';
+    }
+
+    // If --inspect, or --inspect-brk - let it remain in execArgv.
+    if (val.startsWith('--inspect-port=')) {
+      return '--inspect-port=0';
+    }
+    return val;
+  });
 }
 
-var ursa;
-try {
-    ursa = require('ursa');
-} catch (e) {
-}
+const assert = require('assert');
+const forge = require('node-forge');
+const { fork } = require('child_process');
+const crypto = require('crypto');
 
-exports.certCfg = {
-    serialNumber: 1,// Is incremented during new certificates generation.
-    defaultPassphrase: 'Dbsh4_e', // TODO: add passphrase as an optional parameter for related functions.
-    minusDays: 2,
-    plusDays: 366,
-    keySize: 2048
-};
+const alg = 'aes192';
+const cipherPwd = 'asbySdfhbne2347sbns&6329dsbnkhqp3nny39';
 
-function checkCn(cn) {
-    assert(cn && (typeof cn === 'string'), 'No Common Name for certificate');
+const cipher = crypto.createCipher(alg, cipherPwd);
+const decipher = crypto.createDecipher(alg, cipherPwd);
+
+/**
+ * AES encryption.
+ * @param {String} data - utf8 encoded string to encrypt.
+ * @returns {String} - base64 encoded encrypted string.
+ */
+function encrypt(data) {
+  let encrypted = cipher.update(data, 'utf8', 'base64');
+  encrypted += cipher.final('base64');
+  return encrypted;
 }
 
 /**
- * Generates certificate by cn.
- * @param cn
+ * AES decryption.
+ * @param {String} data  - base64 encoded encrypted string.
+ * @returns {String} - utf8 encoded decrypted string.
+ */
+function decrypt(data) {
+  let decrypted = decipher.update(data, 'base64', 'utf8');
+  decrypted += cipher.final('utf8');
+  return decrypted;
+}
+
+let ursa;
+try {
+  ursa = require('ursa'); // eslint-disable-line global-require
+} catch (e) {} // eslint-disable-line no-empty
+
+/**
+ * Default certificate parameters. You can change them.
+ */
+exports.certCfg = {
+  serialNumber: 1, // Is incremented during new certificates generation.
+  defaultPassphrase: 'Dbsh4_e',
+  minusDays: 2,
+  plusDays: 366,
+  keySize: 2048,
+};
+
+function checkCn(cn) {
+  assert(cn && (typeof cn === 'string'), 'No Common Name for certificate');
+}
+
+/**
+ * Generates 2048 bit, RSA key pair.
+ * @return {Object} - RSA keypair: { privateKey, publicKey }
+ */
+exports.genKeyPair = function genKeyPair() {
+  let keyPair = {};
+  if (ursa) {
+    const privKey = ursa.generatePrivateKey(exports.certCfg.keySize);
+    keyPair.privateKey = forge.pki.privateKeyFromPem(privKey.toPrivatePem());
+    keyPair.publicKey = forge.pki.publicKeyFromPem(privKey.toPublicPem());
+  } else {
+    keyPair = forge.pki.rsa.generateKeyPair(exports.certCfg.keySize);
+  }
+  return keyPair;
+};
+
+/**
+ * Generates 2048 bit, RSA key pair for SSH.
+ * @param {String} comment - a comment for public key.
+ * @param {String} [passPhrase] - a passphrase for private key.
+ */
+exports.genSSHKeyPair = function genSSHKeyPair(comment, passPhrase) {
+  const keyPair = exports.genKeyPair();
+  keyPair.publicKey = forge.ssh.publicKeyToOpenSSH(keyPair.publicKey, comment);
+  keyPair.privateKey = forge.ssh.privateKeyToOpenSSH(keyPair.privateKey, passPhrase);
+  return keyPair;
+};
+
+// Default attributes for certificate creation.
+function getDefaultAttrs() {
+  return [{
+    name: 'countryName',
+    value: 'CH',
+  }, {
+    name: 'localityName',
+    value: 'Geneva',
+  }, {
+    name: 'organizationName',
+    value: 'Unique Organization',
+  }];
+}
+
+/**
+ * Generates self-signed certificate by cn.
+ * @param {String} cn - common name
+ *
+ * @param {String} [passPhrase] - pass phrase.
+ * Some inner pass phrase is used as default,
+ * so certificates with default pass phrase can be used only by this module API.
+ *
+ * @param {Array<Object>} [attrs] - three certificate attributes, like following:
+ * ```
+ * [{
+    name: 'countryName',
+    value: 'CH',
+  }, {
+    name: 'localityName',
+    value: 'Geneva',
+  }, {
+    name: 'organizationName',
+    value: 'Unuque Organization',
+  }]
+  ```
  * @returns {{cert: String, pfx: Buffer}}
  */
-exports.genSSCert = function (cn) {
+exports.genSSCert = function genSSCert(
+  cn,
+  passPhrase = exports.certCfg.defaultPassphrase,
+  attrs = getDefaultAttrs()
+) {
+  checkCn(cn);
+  attrs.push({
+    name: 'commonName',
+    value: cn,
+  });
 
-    checkCn(cn);
+  const keyPair = exports.genKeyPair();
 
-    // Constants:
-    var attrs = [{
-        name: 'commonName',
-        value: cn
-    }, {
-        name: 'countryName',
-        value: 'RU'
-    }, {
-        name: 'localityName',
-        value: 'Moscow'
-    }, {
-        name: 'organizationName',
-        value: 'R-Vision'
-    }];
+  const cert = forge.pki.createCertificate();
 
-    var keyPair = {};
-    if (ursa) {
-        var privKey = ursa.generatePrivateKey(exports.certCfg.keySize);
-        keyPair.privateKey = forge.pki.privateKeyFromPem(privKey.toPrivatePem());
-        keyPair.publicKey = forge.pki.publicKeyFromPem(privKey.toPublicPem());
-    } else {
-        keyPair = forge.pki.rsa.generateKeyPair(exports.certCfg.keySize);
-    }
+  cert.serialNumber = (exports.certCfg.serialNumber++).toString();
+  cert.validity.notBefore = new Date();
+  cert.validity.notBefore.setDate(cert.validity.notBefore.getDate() - exports.certCfg.minusDays);
+  cert.validity.notAfter = new Date();
+  cert.validity.notAfter.setDate(cert.validity.notAfter.getDate() + exports.certCfg.plusDays);
+  cert.setSubject(attrs);
+  cert.setIssuer(attrs);
+  cert.publicKey = keyPair.publicKey;
+  cert.sign(keyPair.privateKey, forge.md.sha256.create());
 
-    var cert = forge.pki.createCertificate();
+  const p12Asn1 = forge.pkcs12.toPkcs12Asn1(
+    keyPair.privateKey, cert, passPhrase/* , {algorithm: '3des'} */);
 
-    cert.serialNumber = (exports.certCfg.serialNumber++).toString();
-    cert.validity.notBefore = new Date();
-    cert.validity.notBefore.setDate(cert.validity.notBefore.getDate() - exports.certCfg.minusDays);
-    cert.validity.notAfter = new Date();
-    cert.validity.notAfter.setDate(cert.validity.notAfter.getDate() + exports.certCfg.plusDays);
-    cert.setSubject(attrs);
-    cert.setIssuer(attrs);
-    cert.publicKey = keyPair.publicKey;
-    cert.sign(keyPair.privateKey, forge.md.sha256.create());
+  const p12Der = forge.asn1.toDer(p12Asn1).getBytes();
 
-    var p12Asn1 = forge.pkcs12.toPkcs12Asn1(
-        keyPair.privateKey, cert, exports.certCfg.defaultPassphrase/*, {algorithm: '3des'}*/);
+  const buf = Buffer.from(forge.util.encode64(p12Der), 'base64');
 
-    var p12Der = forge.asn1.toDer(p12Asn1).getBytes();
-
-    var buf = new Buffer(forge.util.encode64(p12Der), 'base64');
-
-    return {
-        cert: forge.pki.certificateToPem(cert),
-        pfx: buf
-    };
+  return {
+    cert: forge.pki.certificateToPem(cert),
+    pfx: buf,
+  };
 };
 
 /**
@@ -95,9 +189,9 @@ exports.genSSCert = function (cn) {
  * @param {String} cert
  * @returns {String} CN of certificate.
  */
-exports.getCertificateCn = function (cert) {
-    var forgeCert = forge.pki.certificateFromPem(cert);
-    return forgeCert.subject.getField('CN').value;
+exports.getCertificateCn = function getCertificateCn(cert) {
+  const forgeCert = forge.pki.certificateFromPem(cert);
+  return forgeCert.subject.getField('CN').value;
 };
 
 /**
@@ -106,127 +200,214 @@ exports.getCertificateCn = function (cert) {
  * @param {String} cert
  * @returns {String} Serial number of certificate.
  */
-exports.getCertificateSerNum = function (cert) {
-    var forgeCert = forge.pki.certificateFromPem(cert);
-    return forgeCert.serialNumber;
+exports.getCertificateSerNum = function getCertificateSerNum(cert) {
+  const forgeCert = forge.pki.certificateFromPem(cert);
+  return forgeCert.serialNumber;
 };
 
-// Этот массив, в основном, для удобства тестирования.
+// Array with certificate properties. Can be used for testing also.
 exports.dataCertProps = [
-    'subjectCn',
-    'issuerCn',
-    'serialNumber',
-    'notAfter',
-    'notBefore'
+  'subjectCn',
+  'issuerCn',
+  'serialNumber',
+  'notAfter',
+  'notBefore',
 ];
 
 /**
  * Extracts data from certificate string or PFX buffer.
  *
  * @param {String | Buffer} certOrPfx - Certificate string or PFX Buffer.
- * @returns {
+ * @returns
  * {subjectCn: String, issuerCn: String, serialNumber: String, notBefore: Date, notAfter: Date}
  * }
  */
-exports.extractCertData = function (certOrPfx) {
-    var forgeCert;
-    if (Buffer.isBuffer(certOrPfx)) {
-        var p12Der = forge.util.decode64(certOrPfx.toString('base64'));
-        var p12Asn1 = forge.asn1.fromDer(p12Der);
-        var p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, exports.certCfg.defaultPassphrase);
-        var bags = p12.getBags({bagType: forge.pki.oids.certBag});
-        forgeCert = bags[forge.pki.oids.certBag][0].cert;
-    } else {
-        forgeCert = forge.pki.certificateFromPem(certOrPfx);
-    }
-    var data = {
-        subjectCn: forgeCert.subject.getField('CN').value,
-        issuerCn: forgeCert.issuer.getField('CN').value,
-        serialNumber: forgeCert.serialNumber,
-        notBefore: forgeCert.validity.notBefore,
-        notAfter: forgeCert.validity.notAfter
-    };
-    return data;
+exports.extractCertData = function extractCertData(
+  certOrPfx,
+  passPhrase = exports.certCfg.defaultPassphrase
+) {
+  let forgeCert;
+  if (Buffer.isBuffer(certOrPfx)) {
+    const p12Der = forge.util.decode64(certOrPfx.toString('base64'));
+    const p12Asn1 = forge.asn1.fromDer(p12Der);
+    const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, passPhrase);
+    const bags = p12.getBags({ bagType: forge.pki.oids.certBag });
+    forgeCert = bags[forge.pki.oids.certBag][0].cert;
+  } else {
+    forgeCert = forge.pki.certificateFromPem(certOrPfx);
+  }
+  const data = {
+    subjectCn: forgeCert.subject.getField('CN').value,
+    issuerCn: forgeCert.issuer.getField('CN').value,
+    countryName: forgeCert.issuer.getField('C').value,
+    organizationName: forgeCert.issuer.getField('O').value,
+    serialNumber: forgeCert.serialNumber,
+    notBefore: forgeCert.validity.notBefore,
+    notAfter: forgeCert.validity.notAfter,
+  };
+  return data;
 };
 
 /**
- *
+ * Checks fields passed in options object, plus 'notBefore', 'notAfter' fields.
  * @param cert
  * @param {Object} [options]
  * @param {String} [options.subjectCn]
  * @param {String} [options.issuerCn]
  * @param {String} [options.serialNumber]
- *
  * @param {Boolean} [options.throwIfWrong]
  *
  * @returns {Object} with boolean check results for each requested field
- * and for notBefore, notAfter fields.
+ * and for 'notBefore', 'notAfter' fields.
  * @throws {Error} if options.throwIfWrong is used and some checking is wrong.
  */
-exports.checkCertificate = function (cert, options) {
-    var certData = exports.extractCertData(cert);
-    var curDate = new Date();
-    var totalRes = true;
-    var res = {};
-    var propName;
+exports.checkCertificate = function checkCertificate(cert, options = {}) {
+  const certData = exports.extractCertData(cert);
+  const curDate = new Date();
+  let totalRes = true;
+  const res = {};
+  let propName;
 
-    function handleErr() {
-        if (!res[propName]) {
-            if (options.throwIfWrong) {
-                throw new Error('Error at checking: ' + propName);
-            }
-            totalRes = false;
-        }
+  function handleErr() {
+    if (!res[propName]) {
+      if (options.throwIfWrong) {
+        throw new Error(`Error at checking: ${propName}`);
+      }
+      totalRes = false;
     }
+  }
 
-    options = options || {};
-
-    for (var i = 0; i < 3; i++) {
-        propName = exports.dataCertProps[i];
-        if (options[propName]) {
-            res[propName] = certData[propName] === options[propName];
-            handleErr();
-        }
+  for (let i = 0; i < 3; i++) {
+    propName = exports.dataCertProps[i];
+    if (options[propName]) {
+      res[propName] = certData[propName] === options[propName];
+      handleErr();
     }
+  }
 
-    propName = 'notBefore';
-    res[propName] = curDate >= certData[propName];
-    handleErr();
+  propName = 'notBefore';
+  res[propName] = curDate >= certData[propName];
+  handleErr();
 
-    propName = 'notAfter';
-    res[propName] = curDate <= certData[propName];
-    handleErr();
+  propName = 'notAfter';
+  res[propName] = curDate <= certData[propName];
+  handleErr();
 
-    res.totalRes = totalRes;
-    return res;
+  res.totalRes = totalRes;
+  return res;
+};
+
+
+function asyncHelper(params) {
+  if (params.passPhrase) {
+    params.passPhrase = encrypt(params.passPhrase); // eslint-disable-line no-param-reassign
+  }
+  return new Promise((resolve, reject) => {
+    const child = fork(__filename, [], { execArgv: getChildExecArgv() });
+    child.send(params);
+    child.on('message', (msg) => {
+      resolve(msg);
+    });
+    child.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Generates self signed certificate asynchronously, in separate process.
+ * @param {String} cn - common name
+ *
+ * @param {String} [passPhrase] - pass phrase.
+ * Some inner pass phrase is used as default,
+ * so certificates with default pass phrase can be used only by this module API.
+ *
+ * @param {Array<Object>} [attrs] - three certificate attributes, like following:
+ * ```
+ * [{
+    name: 'countryName',
+    value: 'CH',
+  }, {
+    name: 'localityName',
+    value: 'Geneva',
+  }, {
+    name: 'organizationName',
+    value: 'Unuque Organization',
+  }]
+ * @returns {Promise} Promise which is resolved to object
+ * {cert (String), pfx (String in base64)}.
+ */
+exports.genSSCertAsync = function genSSCertAsync(cn, passPhrase, attrs) {
+  checkCn(cn);
+
+  const params = {
+    cn,
+    func: 'genSSCert',
+  };
+
+  if (attrs) {
+    params.attrs = attrs;
+  }
+
+  return asyncHelper(params);
 };
 
 /**
- *
- * @param {String} cn
- * @returns {Promise} Promise which is resolved to object {cert (String), pfx (String in base64)}.
+ * Generates 2048 bit, RSA key pair in a separate process.
  */
-exports.genSSCertAsync = function (cn) {
-    return new Promise(function (resolve, reject) {
-        checkCn(cn);
-        var child = fork(__filename, [cn]);
-        child.on('message', function (msg) {
-            resolve(msg);
-        });
-        child.on('error', function (err) {
-            reject(err);
-        });
-    });
+exports.genKeyPairAsync = function genKeyPairAsync() {
+  const params = {
+    func: 'genKeyPair',
+  };
+
+  return asyncHelper(params);
 };
 
-if (process.send) { // Модуль вызван через fork.
-    var cn = process.argv[2];
-    if (cn) {
-        var res = exports.genSSCert(cn);
-        res.pfx = res.pfx.toString('base64');
-        process.send(res, function() {
-          // https://github.com/nodejs/node-v0.x-archive/issues/2605
-          process.exit();
-        });
-    }
+/**
+ * Generates 2048 bit, RSA key pair for SSH in a separate process.
+ * @param {String} comment - a comment for public key.
+ * @param {String} [passPhrase] - a passphrase for private key.
+ */
+exports.genSSHKeyPairAsync = function genSSHKeyPairAsync(comment, passPhrase) {
+  const params = {
+    func: 'genSSHKeyPair',
+    comment,
+    passPhrase,
+  };
+
+  return asyncHelper(params);
 };
+
+if (process.send) { // Child process.
+  process.on('message', (msg) => {
+    const {
+      func, cn, attrs, comment,
+    } = msg;
+    let { passPhrase } = msg;
+    if (passPhrase) {
+      passPhrase = decrypt(passPhrase);
+    }
+
+    let res;
+
+    switch (func) {
+      case 'genKeyPair':
+        res = exports[func]();
+        break;
+      case 'genSSHKeyPair':
+        res = exports[func](comment, passPhrase);
+        break;
+      case 'genSSCert':
+        res = exports[func](cn, passPhrase, attrs);
+        res.pfx = res.pfx.toString('base64');
+        break;
+      default:
+        throw new Error('Unknown function in async call.');
+    }
+
+    process.send(res, () => {
+      // https://github.com/nodejs/node-v0.x-archive/issues/2605
+      process.exit();
+    });
+  });
+}

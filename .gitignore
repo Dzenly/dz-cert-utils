@@ -150,3 +150,6 @@ updates/*/*
 
 typings/
 typings.json
+
+.vscode/
+*no-git*
