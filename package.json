@@ -29,6 +29,6 @@
   "devDependencies": {
     "dz-date-utils": "*",
     "dz-timer-utils": "*",
-    "tia": "*"
+    "tia": "0.15.9"
   }
 }
