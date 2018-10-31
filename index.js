@@ -81,19 +81,28 @@ function checkCn(cn) {
 }
 
 /**
- * Generates 2048 bit, RSA key pair.
+ * Generates RSA key pair.
  * @return {Object} - RSA keypair: { privateKey, publicKey }
  */
 exports.genKeyPair = function genKeyPair() {
-  let keyPair = {};
-  if (ursa) {
-    const privKey = ursa.generatePrivateKey(exports.certCfg.keySize);
-    keyPair.privateKey = forge.pki.privateKeyFromPem(privKey.toPrivatePem());
-    keyPair.publicKey = forge.pki.publicKeyFromPem(privKey.toPublicPem());
-  } else {
-    keyPair = forge.pki.rsa.generateKeyPair(exports.certCfg.keySize);
-  }
-  return keyPair;
+  const keyPair = crypto.generateKeyPairSync('rsa', {
+    modulusLength: exports.certCfg.keySize,
+    publicKeyEncoding: {
+      type: 'spki',
+      format: 'pem',
+    },
+    privateKeyEncoding: {
+      type: 'pkcs8',
+      format: 'pem',
+    },
+  });
+
+  const forgeKeyPair = {};
+
+  forgeKeyPair.privateKey = forge.pki.privateKeyFromPem(keyPair.privateKey);
+  forgeKeyPair.publicKey = forge.pki.publicKeyFromPem(keyPair.publicKey);
+
+  return forgeKeyPair;
 };
 
 /**
