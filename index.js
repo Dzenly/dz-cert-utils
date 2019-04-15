@@ -389,6 +389,9 @@ exports.genSSHKeyPairAsync = function genSSHKeyPairAsync(comment, passPhrase) {
 
 if (process.send) { // Child process.
   process.on('message', (msg) => {
+    if (typeof msg === 'string') {
+      return;
+    }
     const {
       func, cn, attrs, comment,
     } = msg;
