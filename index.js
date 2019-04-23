@@ -60,11 +60,6 @@ function decrypt(data) {
   return decrypted;
 }
 
-let ursa;
-try {
-  ursa = require('ursa'); // eslint-disable-line global-require
-} catch (e) {} // eslint-disable-line no-empty
-
 /**
  * Default certificate parameters. You can change them.
  */
