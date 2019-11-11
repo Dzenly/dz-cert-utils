@@ -30,7 +30,6 @@
     "dz-date-utils": "*",
     "dz-dir-utils": "^0.1.1",
     "dz-file-utils": "^0.1.1",
-    "dz-timer-utils": "*",
-    "tia": "^0.26.16"
+    "dz-timer-utils": "*"
   }
 }
