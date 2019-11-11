@@ -1,6 +1,6 @@
 {
   "name": "dz-cert-utils",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Utilities for work with certificates on top of node-forge.",
   "main": "index.js",
   "scripts": {
