@@ -28,7 +28,6 @@
   },
   "devDependencies": {
     "dz-date-utils": "*",
-    "dz-timer-utils": "*",
-    "tia": "0.15.9"
+    "dz-timer-utils": "*"
   }
 }
