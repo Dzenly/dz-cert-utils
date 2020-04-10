@@ -150,8 +150,30 @@ p.then((res) => {
   t.eq(Boolean(res), true, 'Key pair is generated.');
   return certUtils.genSSHKeyPairAsync('user@machine');
 }).then((res) => {
-  console.log(res);
+  t.eq(Boolean(res), true, 'SSH Key pair is generated.');
+
+  t.msg('Get SSH Public key from Private key w/o passphrase');
+
+  return certUtils.privateKeyToPublicKeyAsync(res.privateKey, '', {
+    openssh: true,
+    comment: 'user@machine',
+  })
+    .then((pubkey) => {
+      t.eq(res.publicKey, pubkey, 'Expected correct public key');
+
+      return certUtils.genSSHKeyPairAsync('user@machine', 'passPhrase');
+    })
+    .then((keyPair) => {
+      t.msg('Get SSH Public key from Private key w/ passphrase');
+
+      return certUtils.privateKeyToPublicKeyAsync(keyPair.privateKey, 'passPhrase', {
+        openssh: true,
+        comment: 'user@machine',
+      })
+      .then((pubkey) => {
+        t.eq(keyPair.publicKey, pubkey, 'Expected correct public key');
+      });
+    });
 }).then(() => {
   t.total();
 });
-

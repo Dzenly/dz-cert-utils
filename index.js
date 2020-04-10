@@ -35,18 +35,16 @@ const crypto = require('crypto');
 const alg = 'aes192';
 const cipherPwd = 'asbySdfhbne2347sbns&6329dsbnkhqp3nny39';
 
-const cipher = crypto.createCipher(alg, cipherPwd);
-const decipher = crypto.createDecipher(alg, cipherPwd);
-
 /**
  * AES encryption.
  * @param {String} data - utf8 encoded string to encrypt.
  * @returns {String} - base64 encoded encrypted string.
  */
 function encrypt(data) {
-  let encrypted = cipher.update(data, 'utf8', 'base64');
-  encrypted += cipher.final('base64');
-  return encrypted;
+  const cipher = crypto.createCipher(alg, cipherPwd);
+  const encrypted = cipher.update(data, 'utf8', 'base64');
+
+  return encrypted + cipher.final('base64');
 }
 
 /**
@@ -55,9 +53,10 @@ function encrypt(data) {
  * @returns {String} - utf8 encoded decrypted string.
  */
 function decrypt(data) {
-  let decrypted = decipher.update(data, 'base64', 'utf8');
-  decrypted += cipher.final('utf8');
-  return decrypted;
+  const decipher = crypto.createDecipher(alg, cipherPwd);
+  const decrypted = decipher.update(data, 'base64', 'utf8');
+
+  return decrypted + decipher.final('utf8');
 }
 
 /**
@@ -110,6 +109,34 @@ exports.genSSHKeyPair = function genSSHKeyPair(comment, passPhrase) {
   keyPair.publicKey = forge.ssh.publicKeyToOpenSSH(keyPair.publicKey, comment);
   keyPair.privateKey = forge.ssh.privateKeyToOpenSSH(keyPair.privateKey, passPhrase);
   return keyPair;
+};
+
+/**
+ * Convert a PEM-formatted private key to a PEM/OpenSSH -formatted public key.
+ * @param {String} privateKey - a PEM-formatted private key.
+ * @param {String} [passPhrase] - a passphrase for private key.
+ * @param {Object} [options] - Options
+ * @param {Boolean} [options.openssh] - format public key to OpenSSH format, default to PEM format
+ * @param {String} [options.comment] - a comment for public key in OpenSSH format.
+ */
+exports.privateKeyToPublicKey = function privateKeyToPublicKey(privateKey, passPhrase = '', options = {}) {
+  const retOpenSshFormat = Boolean(options.openssh);
+  const comment = options.comment;
+
+  const pkey = typeof passPhrase === 'string' && passPhrase
+    ? forge.pki.decryptRsaPrivateKey(privateKey, passPhrase)
+    : forge.pki.privateKeyFromPem(privateKey);
+
+  // in case of wrong passPhrase decryptRsaPrivateKey will return null
+  if (!pkey) {
+    return null;
+  }
+
+  const publicKey = forge.pki.setRsaPublicKey(pkey.n, pkey.e);
+
+  return retOpenSshFormat
+    ? forge.ssh.publicKeyToOpenSSH(publicKey, comment)
+    : forge.pki.publicKeyToPem(publicKey);
 };
 
 // Default attributes for certificate creation.
@@ -382,15 +409,45 @@ exports.genSSHKeyPairAsync = function genSSHKeyPairAsync(comment, passPhrase) {
   return asyncHelper(params);
 };
 
+/**
+ * Convert a PEM-formatted private key to a PEM/OpenSSH -formatted public key.
+ * @param {String} privateKey - a PEM-formatted private key.
+ * @param {String} [passPhrase] - a passphrase for private key.
+ * @param {Object} [options] - Options
+ * @param {Boolean} [options.openssh] - format public key to OpenSSH format, default to PEM format
+ * @param {String} [options.comment] - a comment for public key in OpenSSH format.
+ */
+exports.privateKeyToPublicKeyAsync = function privateKeyToPublicKeyAsync(privateKey, passPhrase, options) {
+  const params = {
+    func: 'privateKeyToPublicKey',
+    privateKey,
+    passPhrase,
+  };
+
+  if (options) {
+    params.options = options;
+  }
+
+  return asyncHelper(params);
+};
+
 if (process.send) { // Child process.
   process.on('message', (msg) => {
     if (typeof msg === 'string') {
       return;
     }
+
     const {
-      func, cn, attrs, comment,
+      attrs,
+      cn,
+      comment,
+      func,
+      options,
+      privateKey,
     } = msg;
+
     let { passPhrase } = msg;
+
     if (passPhrase) {
       passPhrase = decrypt(passPhrase);
     }
@@ -407,6 +464,9 @@ if (process.send) { // Child process.
       case 'genSSCert':
         res = exports[func](cn, passPhrase, attrs);
         res.pfx = res.pfx.toString('base64');
+        break;
+      case 'privateKeyToPublicKey':
+        res = exports[func](privateKey, passPhrase, options);
         break;
       default:
         throw new Error('Unknown function in async call.');
