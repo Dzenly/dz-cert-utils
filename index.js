@@ -127,6 +127,11 @@ exports.privateKeyToPublicKey = function privateKeyToPublicKey(privateKey, passP
     ? forge.pki.decryptRsaPrivateKey(privateKey, passPhrase)
     : forge.pki.privateKeyFromPem(privateKey);
 
+  // in case of wrong passPhrase decryptRsaPrivateKey will return null
+  if (!pkey) {
+    return null;
+  }
+
   const publicKey = forge.pki.setRsaPublicKey(pkey.n, pkey.e);
 
   return retOpenSshFormat
