@@ -128,7 +128,8 @@ p.then((res) => {
 }).then((res) => {
   t.fail(`Here should be error:${certUtils.getCertificateCn(res.cert)}`);
 }, (err) => {
-  t.checkAssertion(err, 'Expected assertion');
+  t.eq(err.name, 'AssertionError [ERR_ASSERTION]', 'Expected assertion');
+  // t.checkAssertion(err, 'Expected assertion');
 }).then(() => {
   const attrs = [{
     name: 'countryName',
